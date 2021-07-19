@@ -1,4 +1,5 @@
-from robot_bases import XmlBasedRobot, MJCFBasedRobot, URDFBasedRobot
+# from robot_bases import XmlBasedRobot, MJCFBasedRobot, URDFBasedRobot
+from pybullet_envs.robot_bases import XmlBasedRobot, MJCFBasedRobot, URDFBasedRobot
 import numpy as np
 import pybullet
 import os
