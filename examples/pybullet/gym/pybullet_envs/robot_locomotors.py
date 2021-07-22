@@ -53,8 +53,10 @@ class WalkerBase(MJCFBasedRobot):
     r, p, yaw = self.body_rpy
     self.walk_target_theta = np.arctan2(self.walk_target_y - self.body_xyz[1],
                                         self.walk_target_x - self.body_xyz[0])
-    self.walk_target_dist = np.linalg.norm(
-        [self.walk_target_y - self.body_xyz[1], self.walk_target_x - self.body_xyz[0]])
+#     self.walk_target_dist = np.linalg.norm(
+#         [self.walk_target_y - self.body_xyz[1], self.walk_target_x - self.body_xyz[0]])
+#   We want the body to move towards right direction
+    self.walk_target_dist = abs(self.walk_target_x - self.body_xyz[0])
     angle_to_target = self.walk_target_theta - yaw
 
     rot_speed = np.array([[np.cos(-yaw), -np.sin(-yaw), 0], [np.sin(-yaw),
@@ -158,9 +160,10 @@ class Humanoid(WalkerBase):
                         'humanoid_symmetric.xml',
                         'torso',
                         action_dim=17,
-                        obs_dim=44,
+                        obs_dim=43,
                         power=0.41)
     # 17 joints, 4 of them important for walking (hip, knee), others may as well be turned off, 17/4 = 4.25
+    self.target = None 
 
   def robot_specific_reset(self, bullet_client):
     WalkerBase.robot_specific_reset(self, bullet_client)
@@ -175,6 +178,8 @@ class Humanoid(WalkerBase):
     self.motor_names += ["left_shoulder1", "left_shoulder2", "left_elbow"]
     self.motor_power += [75, 75, 75]
     self.motors = [self.jdict[n] for n in self.motor_names]
+    self.yaw   = 0
+    self.random_yaw = True 
     if self.random_yaw:
       position = [0, 0, 0]
       orientation = [0, 0, 0]
@@ -192,12 +197,21 @@ class Humanoid(WalkerBase):
       else:
         position = [0, 0, 1.4]
         orientation = [0, 0, yaw]  # just face random direction, but stay straight otherwise
+        #https://github.com/bulletphysics/bullet3/blob/master/docs/pybullet_quickstart_guide/PyBulletQuickstartGuide.md.html
+      orientation = self._p.getQuaternionFromEuler(orientation)
       self.robot_body.reset_position(position)
       self.robot_body.reset_orientation(orientation)
     self.initial_z = 0.8
+    self.set_target_position(1.0,0.0)
 
   random_yaw = False
   random_lean = False
+  
+  def set_angle(self,angle):
+    self.yaw = angle 
+    orientation = [0,0,angle]
+    orientation = self._p.getQuaternionFromEuler(orientation)
+    self.robot_body.reset_orientation(orientation)
 
   def apply_action(self, a):
     assert (np.isfinite(a).all())
@@ -207,6 +221,17 @@ class Humanoid(WalkerBase):
 
   def alive_bonus(self, z, pitch):
     return +2 if z > 0.78 else -1  # 2 here because 17 joints produce a lot of electricity cost just from policy noise, living must be better than dying
+  
+  def set_target_position(self,target_x,target_y):
+    if(self.target):
+      #https://www.programcreek.com/python/example/122148/pybullet.resetBasePositionAndOrientation
+      self._p.resetBasePositionAndOrientation(self.target.bodies[0],[target_x,target_y,0.7],[0,0,0,1])
+    else:
+      self.target = get_sphere(self._p,target_x,target_y,0.7)
+      
+  def get_robot_position(self):
+    
+    return self.body_xyz
 
 
 def get_cube(_p, x, y, z):
@@ -219,7 +244,7 @@ def get_cube(_p, x, y, z):
 
 
 def get_sphere(_p, x, y, z):
-  body = _p.loadURDF(os.path.join(pybullet_data.getDataPath(), "sphere2red_nocol.urdf"), [x, y, z])
+  body = _p.loadURDF(os.path.join(pybullet_data.getDataPath(), "target.urdf"), [x, y, z])
   part_name, _ = _p.getBodyInfo(body)
   part_name = part_name.decode("utf8")
   bodies = [body]
